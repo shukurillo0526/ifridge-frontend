@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ifridge_app/core/theme/app_theme.dart';
 import 'package:ifridge_app/core/widgets/shimmer_loading.dart';
 import 'package:ifridge_app/core/widgets/slide_in_item.dart';
+import 'package:ifridge_app/features/cook/presentation/screens/recipe_detail_screen.dart';
 
 const _demoUserId = '00000000-0000-4000-8000-000000000001';
 
@@ -28,6 +29,7 @@ class _CookScreenState extends State<CookScreen>
 
   // Recipes grouped by tier key ('1'–'5')
   Map<String, List<Map<String, dynamic>>> _tiers = {};
+  Set<String> _ownedIngredientIds = {};
 
   static const _tierMeta = [
     (label: 'Perfect', icon: Icons.star, key: '1'),
@@ -74,14 +76,17 @@ class _CookScreenState extends State<CookScreen>
       // 2. Get all recipes with their ingredients
       final recipeRows = await client
           .from('recipes')
-          .select('*, recipe_ingredients(ingredient_id, quantity, unit, is_optional, prep_note, ingredients(display_name_en))');
+          .select(
+            '*, recipe_ingredients(ingredient_id, quantity, unit, is_optional, prep_note, ingredients(display_name_en))',
+          );
 
       // 3. Score each recipe
       final scored = <Map<String, dynamic>>[];
       for (final recipe in (recipeRows as List)) {
         final ri = (recipe['recipe_ingredients'] as List?) ?? [];
-        final requiredIngredients =
-            ri.where((r) => r['is_optional'] != true).toList();
+        final requiredIngredients = ri
+            .where((r) => r['is_optional'] != true)
+            .toList();
         final totalRequired = requiredIngredients.length;
         if (totalRequired == 0) continue;
 
@@ -94,11 +99,13 @@ class _CookScreenState extends State<CookScreen>
         final missing = requiredIngredients
             .where((r) => !ownedIds.contains(r['ingredient_id']))
             .map((r) {
-          final ing = r['ingredients'] as Map<String, dynamic>?;
-          return ing?['display_name_en'] ?? 'unknown';
-        }).toList();
+              final ing = r['ingredients'] as Map<String, dynamic>?;
+              return ing?['display_name_en'] ?? 'unknown';
+            })
+            .toList();
 
         scored.add({
+          'id': recipe['id'],
           'title': recipe['title'],
           'description': recipe['description'],
           'cuisine': recipe['cuisine'] ?? '',
@@ -115,11 +122,17 @@ class _CookScreenState extends State<CookScreen>
       }
 
       // 4. Sort into tiers
-      scored.sort((a, b) =>
-          (b['match_pct'] as double).compareTo(a['match_pct'] as double));
+      scored.sort(
+        (a, b) =>
+            (b['match_pct'] as double).compareTo(a['match_pct'] as double),
+      );
 
       final Map<String, List<Map<String, dynamic>>> tiers = {
-        '1': [], '2': [], '3': [], '4': [], '5': [],
+        '1': [],
+        '2': [],
+        '3': [],
+        '4': [],
+        '5': [],
       };
 
       for (final r in scored) {
@@ -139,6 +152,7 @@ class _CookScreenState extends State<CookScreen>
 
       setState(() {
         _tiers = tiers;
+        _ownedIngredientIds = ownedIds;
         _loading = false;
       });
     } catch (e) {
@@ -196,19 +210,28 @@ class _CookScreenState extends State<CookScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.cloud_off,
-                  size: 64, color: Colors.white.withValues(alpha: 0.3)),
+              Icon(
+                Icons.cloud_off,
+                size: 64,
+                color: Colors.white.withValues(alpha: 0.3),
+              ),
               const SizedBox(height: 16),
-              const Text('Couldn\'t load recipes',
-                  style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600)),
+              const Text(
+                'Couldn\'t load recipes',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const SizedBox(height: 8),
-              Text('Check your connection and try again.',
-                  style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.5),
-                      fontSize: 13)),
+              Text(
+                'Check your connection and try again.',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 13,
+                ),
+              ),
               const SizedBox(height: 24),
               FilledButton.icon(
                 onPressed: _fetchRecipes,
@@ -224,8 +247,7 @@ class _CookScreenState extends State<CookScreen>
 
     return TabBarView(
       controller: _tabController,
-      children:
-          _tierMeta.map((t) => _buildTierList(t.key, t.label)).toList(),
+      children: _tierMeta.map((t) => _buildTierList(t.key, t.label)).toList(),
     );
   }
 
@@ -237,16 +259,27 @@ class _CookScreenState extends State<CookScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.restaurant_menu,
-                size: 56, color: Colors.white.withValues(alpha: 0.2)),
+            Icon(
+              Icons.restaurant_menu,
+              size: 56,
+              color: Colors.white.withValues(alpha: 0.2),
+            ),
             const SizedBox(height: 12),
-            Text('No $tierLabel recipes yet',
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.5), fontSize: 15)),
+            Text(
+              'No $tierLabel recipes yet',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.5),
+                fontSize: 15,
+              ),
+            ),
             const SizedBox(height: 6),
-            Text('Add items to your shelf to get recommendations',
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.3), fontSize: 12)),
+            Text(
+              'Add items to your shelf to get recommendations',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.3),
+                fontSize: 12,
+              ),
+            ),
           ],
         ),
       );
@@ -260,7 +293,11 @@ class _CookScreenState extends State<CookScreen>
         itemCount: recipes.length,
         itemBuilder: (context, index) => SlideInItem(
           delay: index * 80,
-          child: _RecipeCard(recipe: recipes[index], tierKey: tierKey),
+          child: _RecipeCard(
+            recipe: recipes[index],
+            tierKey: tierKey,
+            ownedIngredientIds: _ownedIngredientIds,
+          ),
         ),
       ),
     );
@@ -272,8 +309,13 @@ class _CookScreenState extends State<CookScreen>
 class _RecipeCard extends StatelessWidget {
   final Map<String, dynamic> recipe;
   final String tierKey;
+  final Set<String> ownedIngredientIds;
 
-  const _RecipeCard({required this.recipe, required this.tierKey});
+  const _RecipeCard({
+    required this.recipe,
+    required this.tierKey,
+    required this.ownedIngredientIds,
+  });
 
   Color get _tierColor {
     switch (tierKey) {
@@ -303,119 +345,164 @@ class _RecipeCard extends StatelessWidget {
     final cookTime = recipe['cook_time_minutes'];
     final difficulty = recipe['difficulty'] ?? 1;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _tierColor.withValues(alpha: 0.3), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: _tierColor.withValues(alpha: 0.1),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => RecipeDetailScreen(
+              recipeId: recipe['id'] as String,
+              title: title,
+              description: description,
+              cuisine: cuisine,
+              difficulty: difficulty as int?,
+              prepTime: prepTime as int?,
+              cookTime: cookTime as int?,
+              servings: recipe['servings'] as int?,
+              matchPct: recipe['match_pct'] as double? ?? 0.0,
+              tierColor: _tierColor,
+              ownedIngredientIds: ownedIngredientIds,
+            ),
           ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Title row
-            Row(
-              children: [
-                Expanded(
-                  child: Text(title,
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: AppTheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: _tierColor.withValues(alpha: 0.3),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: _tierColor.withValues(alpha: 0.1),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Title row
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
                       style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700)),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _tierColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
-                  child: Text(
-                    '${matchPct.toInt()}%',
-                    style: TextStyle(
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _tierColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${matchPct.toInt()}%',
+                      style: TextStyle(
                         color: _tierColor,
                         fontSize: 13,
-                        fontWeight: FontWeight.w700),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
 
-            if (description.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(description,
+              if (description.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  description,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.6),
-                      fontSize: 13)),
-            ],
-
-            const SizedBox(height: 10),
-
-            // Info chips
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: [
-                _InfoChip(
-                  icon: Icons.inventory_2,
-                  label: '$matched/$total ingredients',
-                  color: matchPct >= 100 ? AppTheme.freshGreen : Colors.orange,
+                    color: Colors.white.withValues(alpha: 0.6),
+                    fontSize: 13,
+                  ),
                 ),
-                if (cuisine.isNotEmpty)
+              ],
+
+              const SizedBox(height: 10),
+
+              // Info chips
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
                   _InfoChip(
-                      icon: Icons.public, label: cuisine, color: Colors.white54),
-                if (prepTime != null)
-                  _InfoChip(
+                    icon: Icons.inventory_2,
+                    label: '$matched/$total ingredients',
+                    color: matchPct >= 100
+                        ? AppTheme.freshGreen
+                        : Colors.orange,
+                  ),
+                  if (cuisine.isNotEmpty)
+                    _InfoChip(
+                      icon: Icons.public,
+                      label: cuisine,
+                      color: Colors.white54,
+                    ),
+                  if (prepTime != null)
+                    _InfoChip(
                       icon: Icons.timer,
                       label: cookTime != null
                           ? '${prepTime + cookTime} min'
                           : '$prepTime min',
-                      color: Colors.white54),
-                _InfoChip(
-                  icon: Icons.signal_cellular_alt,
-                  label: '⚡' * (difficulty as int),
-                  color: Colors.white54,
+                      color: Colors.white54,
+                    ),
+                  _InfoChip(
+                    icon: Icons.signal_cellular_alt,
+                    label: '⚡' * (difficulty as int),
+                    color: Colors.white54,
+                  ),
+                ],
+              ),
+
+              // Missing ingredients
+              if (missing.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.shopping_cart_outlined,
+                        size: 14,
+                        color: Colors.orange,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Need: ${missing.join(", ")}',
+                          style: const TextStyle(
+                            color: Colors.orange,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
-            ),
-
-            // Missing ingredients
-            if (missing.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.shopping_cart_outlined,
-                        size: 14, color: Colors.orange),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Need: ${missing.join(", ")}',
-                        style:
-                            const TextStyle(color: Colors.orange, fontSize: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -427,8 +514,11 @@ class _InfoChip extends StatelessWidget {
   final String label;
   final Color color;
 
-  const _InfoChip(
-      {required this.icon, required this.label, required this.color});
+  const _InfoChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {

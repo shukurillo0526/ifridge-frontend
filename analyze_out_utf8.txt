@@ -1,0 +1,7 @@
+﻿Analyzing cook...
+
+  error - presentation\screens\cook_screen.dart:454:6 - Expected to find ')'. - expected_token
+  error - presentation\screens\cook_screen.dart:455:6 - Expected to find ')'. - expected_token
+warning - presentation\screens\recipe_detail_screen.dart:13:7 - The declaration '_demoUserId' isn't referenced. Try removing the declaration of '_demoUserId'. - unused_element
+
+3 issues found.
