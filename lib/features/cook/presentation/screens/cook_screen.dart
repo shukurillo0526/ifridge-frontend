@@ -157,10 +157,11 @@ class _CookScreenState extends State<CookScreen>
         headerSliverBuilder: (context, innerBoxScrolled) => [
           SliverAppBar(
             pinned: true,
-            floating: true,
-            expandedHeight: 140,
+            floating: false,
+            expandedHeight: 180,
             backgroundColor: AppTheme.surface,
             flexibleSpace: FlexibleSpaceBar(
+              titlePadding: const EdgeInsets.only(left: 16, bottom: 56),
               title: const Text(
                 'What to Cook?',
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
