@@ -5,10 +5,12 @@
 // and displays results in 3 confidence tiers: auto-add, confirm, or correct.
 
 import 'dart:typed_data';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:ifridge_app/core/services/api_service.dart';
 import 'package:ifridge_app/core/theme/app_theme.dart';
+import 'package:ifridge_app/features/scan/presentation/screens/audit_screen.dart';
 
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key});
@@ -427,22 +429,32 @@ class _ScanScreenState extends State<ScanScreen>
 
           const SizedBox(height: 12),
 
-          // Add All Button
+          // Audit Items Button
           SizedBox(
             width: double.infinity,
             height: 52,
             child: FilledButton.icon(
               onPressed: () {
-                 // TODO: Phase 2 Connect Bulk Insert to Supabase RPC
-                 ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('All items added to shelf!')),
+                final itemsList = (_results?['items'] as List?) ?? [];
+                if (itemsList.isEmpty) return;
+                
+                final auditItems = itemsList.map((i) {
+                  return AuditItem(
+                    id: DateTime.now().millisecondsSinceEpoch.toString() + math.Random().nextInt(1000).toString(),
+                    title: i['canonical_name'] ?? 'Unknown',
+                    description: '${i['quantity'] ?? 1} ${i['unit'] ?? "pcs"} • Exp: ${i['expiry_date'] != null ? DateTime.parse(i['expiry_date']).toString().split(' ')[0] : 'Unknown'}',
+                    category: i['category'] ?? 'Pantry',
+                    rawDetect: i['canonical_name'] ?? 'Unknown Item',
                   );
-                 setState(() {
-                  _results = null;
-                 });
+                }).toList();
+
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => AuditScreen(initialItems: auditItems)),
+                );
               },
-              icon: const Icon(Icons.playlist_add_check),
-              label: const Text('Add All to Shelf', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              icon: const Icon(Icons.style),
+              label: const Text('Start Visual Audit', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               style: FilledButton.styleFrom(
                 backgroundColor: AppTheme.accent,
                 shape: RoundedRectangleBorder(
