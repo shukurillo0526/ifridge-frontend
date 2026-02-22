@@ -7,6 +7,8 @@ import 'package:ifridge_app/core/theme/app_theme.dart';
 import 'package:ifridge_app/features/shelf/domain/inventory_item.dart';
 import 'package:ifridge_app/features/shelf/presentation/widgets/freshness_overlay.dart';
 
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 class InventoryItemCard extends StatelessWidget {
   final InventoryItem item;
   final VoidCallback? onTap;
@@ -31,141 +33,192 @@ class InventoryItemCard extends StatelessWidget {
       isUrgent: isUrgent,
       child: GestureDetector(
         onTap: onTap,
-        child: Stack(
-          children: [
-            // --- Card Body ---
-            Container(
-              decoration: BoxDecoration(
-                color: IFridgeTheme.bgCard,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.06),
+        child: Dismissible(
+          key: Key(item.id),
+          background: Container(
+            decoration: BoxDecoration(
+              color: Colors.green.withValues(alpha: 0.8),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.only(left: 20),
+            child: const Icon(Icons.fastfood, color: Colors.white, size: 30),
+          ),
+          secondaryBackground: Container(
+            decoration: BoxDecoration(
+              color: Colors.redAccent.withValues(alpha: 0.8),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 20),
+            child: const Icon(Icons.delete, color: Colors.white, size: 30),
+          ),
+          confirmDismiss: (direction) async {
+            if (direction == DismissDirection.startToEnd) {
+              // Quick Use 1 Unit via RPC
+              try {
+                await Supabase.instance.client.rpc('consume_inventory_item', params: {
+                  'p_inventory_id': item.id,
+                  'p_qty_to_consume': 1.0,
+                });
+                return false; // Snap back, UI updates from realtime stream
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error consuming item: $e')),
+                  );
+                }
+                return false;
+              }
+            } else {
+              // Delete Item
+              try {
+                await Supabase.instance.client
+                    .from('inventory_items')
+                    .delete()
+                    .eq('id', item.id);
+                return true;
+              } catch (_) {
+                return false;
+              }
+            }
+          },
+          child: Stack(
+            children: [
+              // --- Card Body ---
+              Container(
+                decoration: BoxDecoration(
+                  color: IFridgeTheme.bgCard,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.06),
+                  ),
                 ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // --- Icon / Image Area ---
-                  Expanded(
-                    flex: 3,
-                    child: Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: IFridgeTheme.bgElevated,
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // --- Icon / Image Area ---
+                    Expanded(
+                      flex: 3,
+                      child: Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: IFridgeTheme.bgElevated,
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(14),
+                          ),
+                        ),
+                        child: Center(
+                          child: ColorFiltered(
+                            colorFilter: isExpired
+                                ? const ColorFilter.mode(
+                                    Colors.grey, BlendMode.saturation)
+                                : const ColorFilter.mode(
+                                    Colors.transparent, BlendMode.multiply),
+                            child: Text(
+                              _categoryEmoji(item.category),
+                              style: const TextStyle(fontSize: 36),
+                            ),
+                          ),
                         ),
                       ),
-                      child: Center(
-                        child: ColorFiltered(
-                          colorFilter: isExpired
-                              ? const ColorFilter.mode(
-                                  Colors.grey, BlendMode.saturation)
-                              : const ColorFilter.mode(
-                                  Colors.transparent, BlendMode.multiply),
-                          child: Text(
-                            _categoryEmoji(item.category),
-                            style: const TextStyle(fontSize: 36),
-                          ),
+                    ),
+
+                    // --- Info Area ---
+                    Expanded(
+                      flex: 2,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 6),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              item.name,
+                              style: TextStyle(
+                                color: isExpired
+                                    ? IFridgeTheme.textMuted
+                                    : IFridgeTheme.textPrimary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                decoration: isExpired
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              _expiryLabel,
+                              style: TextStyle(
+                                color: _expiryLabelColor,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                  ),
+                  ],
+                ),
+              ),
 
-                  // --- Info Area ---
-                  Expanded(
-                    flex: 2,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 6),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            item.name,
-                            style: TextStyle(
-                              color: isExpired
-                                  ? IFridgeTheme.textMuted
-                                  : IFridgeTheme.textPrimary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              decoration: isExpired
-                                  ? TextDecoration.lineThrough
-                                  : null,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            _expiryLabel,
-                            style: TextStyle(
-                              color: _expiryLabelColor,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
+              // --- Freshness Overlay ---
+              Positioned.fill(
+                child: FreshnessOverlay(freshnessRatio: item.freshnessRatio),
+              ),
+
+              // --- Quantity Badge ---
+              if (item.quantity > 0) // Changed to show even if 1 to indicate it is interactable
+                Positioned(
+                  top: 6,
+                  left: 6,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: IFridgeTheme.bgDark.withValues(alpha: 0.8),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '${item.quantity.toStringAsFixed(item.quantity == item.quantity.roundToDouble() ? 0 : 1)} ${item.unit}',
+                      style: const TextStyle(
+                        color: IFridgeTheme.textPrimary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
+                ),
 
-            // --- Freshness Overlay ---
-            Positioned.fill(
-              child: FreshnessOverlay(freshnessRatio: item.freshnessRatio),
-            ),
-
-            // --- Quantity Badge ---
-            if (item.quantity > 1)
-              Positioned(
-                top: 6,
-                left: 6,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: IFridgeTheme.bgDark.withOpacity(0.8),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    '×${item.quantity.toStringAsFixed(item.quantity == item.quantity.roundToDouble() ? 0 : 1)}',
-                    style: const TextStyle(
-                      color: IFridgeTheme.textPrimary,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
+              // --- State Badge (opened / frozen) ---
+              if (item.itemState != 'sealed')
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _stateBadgeColor.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      _stateBadgeLabel,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 8,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
-              ),
-
-            // --- State Badge (opened / frozen) ---
-            if (item.itemState != 'sealed')
-              Positioned(
-                top: 6,
-                right: 6,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: _stateBadgeColor.withOpacity(0.9),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    _stateBadgeLabel,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 8,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );

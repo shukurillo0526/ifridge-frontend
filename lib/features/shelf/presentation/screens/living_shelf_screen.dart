@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ifridge_app/core/theme/app_theme.dart';
 import 'package:ifridge_app/core/widgets/shimmer_loading.dart';
+import 'package:ifridge_app/core/widgets/empty_state_illustration.dart';
 import 'package:ifridge_app/core/widgets/slide_in_item.dart';
 import 'package:ifridge_app/features/shelf/domain/inventory_item.dart';
 import 'package:ifridge_app/features/shelf/presentation/widgets/inventory_item_card.dart';
@@ -184,32 +185,16 @@ class _LivingShelfScreenState extends State<LivingShelfScreen>
 
   Widget _buildShelfGrid(List<InventoryItem> items, String zone) {
     if (items.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              zone == 'Fridge' ? '🧊' : zone == 'Freezer' ? '❄️' : '🗄️',
-              style: const TextStyle(fontSize: 64),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Your $zone is empty',
-              style: const TextStyle(
-                color: IFridgeTheme.textSecondary,
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Scan items or add them manually',
-              style: TextStyle(
-                color: IFridgeTheme.textMuted,
-                fontSize: 14,
-              ),
-            ),
-          ],
+      return Padding(
+        padding: const EdgeInsets.only(top: 100),
+        child: EmptyStateIllustration(
+          icon: _zoneIcon(zone),
+          title: 'Your $zone is Empty',
+          description: 'Ready to fill up your digital kitchen.\nAdd items manually or tap scan.',
+          actionLabel: 'Add Ingredient',
+          onAction: () {
+            // Placeholder: Future Phase 2 manual entry
+          },
         ),
       );
     }
@@ -334,5 +319,12 @@ class _LivingShelfScreenState extends State<LivingShelfScreen>
         ],
       ),
     );
+  }
+
+  IconData _zoneIcon(String zone) {
+    if (zone == 'Fridge') return Icons.kitchen;
+    if (zone == 'Freezer') return Icons.ac_unit;
+    if (zone == 'Pantry') return Icons.inventory_2;
+    return Icons.shelves;
   }
 }
