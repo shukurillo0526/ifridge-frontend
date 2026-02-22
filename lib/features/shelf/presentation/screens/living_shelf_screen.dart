@@ -59,6 +59,7 @@ class _LivingShelfScreenState extends State<LivingShelfScreen>
           .eq('user_id', _demoUserId)
           .order('computed_expiry', ascending: true);
 
+
       setState(() {
         _items = (data as List)
             .map((row) =>

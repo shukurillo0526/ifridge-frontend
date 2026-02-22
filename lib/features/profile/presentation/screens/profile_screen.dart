@@ -2,23 +2,160 @@
 // ==========================
 // User profile with gamification stats, XP progress,
 // earned badges, flavor profile visualization, and settings.
+// Loads real data from Supabase tables: users, gamification_stats,
+// user_flavor_profile.
 
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ifridge_app/core/theme/app_theme.dart';
 import 'package:ifridge_app/features/gamification/domain/badges.dart' show levelFromXp;
 
-class ProfileScreen extends StatelessWidget {
+const _demoUserId = '00000000-0000-4000-8000-000000000001';
+
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
   @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  bool _loading = true;
+  String? _error;
+
+  // User data
+  String _userName = 'Chef';
+  int _totalXp = 0;
+  int _level = 1;
+
+  // Gamification stats
+  int _mealsCooked = 0;
+  int _itemsSaved = 0;
+  int _currentStreak = 0;
+  List<Map<String, dynamic>> _badges = [];
+
+  // Flavor profile
+  Map<String, double> _flavorValues = {
+    'Sweet': 0.5, 'Salty': 0.5, 'Sour': 0.5,
+    'Bitter': 0.5, 'Umami': 0.5, 'Spicy': 0.5,
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final client = Supabase.instance.client;
+
+      // Parallel queries
+      final results = await Future.wait([
+        client.from('users').select().eq('id', _demoUserId).maybeSingle(),
+        client.from('gamification_stats').select().eq('user_id', _demoUserId).maybeSingle(),
+        client.from('user_flavor_profile').select().eq('user_id', _demoUserId).maybeSingle(),
+      ]);
+
+      final userData = results[0];
+      final statsData = results[1];
+      final flavorData = results[2];
+
+      setState(() {
+        // User
+        _userName = userData?['display_name'] ?? 'Chef';
+
+        // Gamification
+        _totalXp = (statsData?['xp_points'] as int?) ?? 0;
+        _level = levelFromXp(_totalXp);
+        _mealsCooked = (statsData?['total_meals_cooked'] as int?) ?? 0;
+        _itemsSaved = (statsData?['items_saved'] as int?) ?? 0;
+        _currentStreak = (statsData?['current_streak'] as int?) ?? 0;
+
+        // Badges from JSONB
+        final rawBadges = statsData?['badges'];
+        if (rawBadges is List) {
+          _badges = rawBadges.cast<Map<String, dynamic>>();
+        }
+
+        // Flavor profile
+        if (flavorData != null) {
+          _flavorValues = {
+            'Sweet': (flavorData['sweet'] as num?)?.toDouble() ?? 0.5,
+            'Salty': (flavorData['salty'] as num?)?.toDouble() ?? 0.5,
+            'Sour': (flavorData['sour'] as num?)?.toDouble() ?? 0.5,
+            'Bitter': (flavorData['bitter'] as num?)?.toDouble() ?? 0.5,
+            'Umami': (flavorData['umami'] as num?)?.toDouble() ?? 0.5,
+            'Spicy': (flavorData['spicy'] as num?)?.toDouble() ?? 0.5,
+          };
+        }
+
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Demo data — replace with real user data from Supabase
-    const userName = 'Chef Demo';
-    const totalXp = 850;
-    final level = levelFromXp(totalXp);
-    final nextLevelXp = (level + 1) * (level + 1) * 100;
-    final progress = totalXp / nextLevelXp;
+    if (_loading) {
+      return Scaffold(
+        backgroundColor: AppTheme.background,
+        body: const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: AppTheme.accent),
+              SizedBox(height: 16),
+              Text('Loading profile...', style: TextStyle(color: Colors.white70)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_error != null) {
+      return Scaffold(
+        backgroundColor: AppTheme.background,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.cloud_off, size: 64, color: Colors.white.withValues(alpha: 0.3)),
+                const SizedBox(height: 16),
+                const Text('Couldn\'t load profile',
+                    style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: _loadProfile,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                  style: FilledButton.styleFrom(backgroundColor: AppTheme.accent),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final nextLevelXp = (_level + 1) * (_level + 1) * 100;
+    final progress = _totalXp / nextLevelXp;
+
+    // All possible badges with earned status
+    final allBadges = _buildBadgeList();
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -66,9 +203,9 @@ class ProfileScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      const Text(
-                        userName,
-                        style: TextStyle(
+                      Text(
+                        _userName,
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 20,
                           fontWeight: FontWeight.w700,
@@ -76,7 +213,7 @@ class ProfileScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Level $level • $totalXp XP',
+                        'Level $_level • $_totalXp XP',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.6),
                           fontSize: 14,
@@ -87,6 +224,13 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ),
             ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: _loadProfile,
+                tooltip: 'Refresh',
+              ),
+            ],
           ),
 
           // ── Body ───────────────────────────────────────────────
@@ -103,14 +247,14 @@ class ProfileScreen extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Level $level',
+                            'Level $_level',
                             style: const TextStyle(
                               color: AppTheme.tierGold,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                           Text(
-                            '$totalXp / $nextLevelXp XP',
+                            '$_totalXp / $nextLevelXp XP',
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.5),
                               fontSize: 13,
@@ -125,8 +269,7 @@ class ProfileScreen extends StatelessWidget {
                           value: progress.clamp(0.0, 1.0),
                           minHeight: 10,
                           backgroundColor: Colors.white.withValues(alpha: 0.08),
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                              AppTheme.accent),
+                          valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.accent),
                         ),
                       ),
                     ],
@@ -141,13 +284,17 @@ class ProfileScreen extends StatelessWidget {
                   child: Row(
                     children: [
                       _StatTile(
-                          value: '24', label: 'Items\nScanned', icon: Icons.camera_alt),
+                          value: '$_mealsCooked',
+                          label: 'Meals\nCooked',
+                          icon: Icons.restaurant),
                       _StatTile(
-                          value: '8', label: 'Recipes\nCooked', icon: Icons.restaurant),
-                      _StatTile(
-                          value: '1.2kg',
-                          label: 'Waste\nPrevented',
+                          value: '$_itemsSaved',
+                          label: 'Items\nSaved',
                           icon: Icons.eco),
+                      _StatTile(
+                          value: '$_currentStreak',
+                          label: 'Day\nStreak',
+                          icon: Icons.local_fire_department),
                     ],
                   ),
                 ),
@@ -160,38 +307,7 @@ class ProfileScreen extends StatelessWidget {
                   child: Wrap(
                     spacing: 12,
                     runSpacing: 12,
-                    children: [
-                      _BadgeTile(
-                        emoji: '🌱',
-                        name: 'First Scan',
-                        earned: true,
-                      ),
-                      _BadgeTile(
-                        emoji: '👨‍🍳',
-                        name: 'First Cook',
-                        earned: true,
-                      ),
-                      _BadgeTile(
-                        emoji: '🧹',
-                        name: 'Zero Waste',
-                        earned: true,
-                      ),
-                      _BadgeTile(
-                        emoji: '🔥',
-                        name: '7-Day Streak',
-                        earned: false,
-                      ),
-                      _BadgeTile(
-                        emoji: '🌍',
-                        name: 'World Chef',
-                        earned: false,
-                      ),
-                      _BadgeTile(
-                        emoji: '💎',
-                        name: 'Master Chef',
-                        earned: false,
-                      ),
-                    ],
+                    children: allBadges,
                   ),
                 ),
 
@@ -205,14 +321,7 @@ class ProfileScreen extends StatelessWidget {
                     child: CustomPaint(
                       size: const Size(200, 200),
                       painter: _FlavorRadarPainter(
-                        values: {
-                          'Sweet': 0.7,
-                          'Salty': 0.5,
-                          'Sour': 0.3,
-                          'Bitter': 0.2,
-                          'Umami': 0.8,
-                          'Spicy': 0.6,
-                        },
+                        values: _flavorValues,
                         color: AppTheme.accent,
                       ),
                     ),
@@ -259,6 +368,27 @@ class ProfileScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  List<Widget> _buildBadgeList() {
+    final earnedIds = _badges.map((b) => b['id'] as String?).toSet();
+
+    const allPossible = [
+      {'id': 'first_scan', 'emoji': '🌱', 'name': 'First Scan'},
+      {'id': 'first_meal', 'emoji': '👨‍🍳', 'name': 'First Cook'},
+      {'id': 'waste_fighter', 'emoji': '🧹', 'name': 'Waste Fighter'},
+      {'id': 'streak_7', 'emoji': '🔥', 'name': '7-Day Streak'},
+      {'id': 'world_chef', 'emoji': '🌍', 'name': 'World Chef'},
+      {'id': 'master_chef', 'emoji': '💎', 'name': 'Master Chef'},
+    ];
+
+    return allPossible
+        .map((b) => _BadgeTile(
+              emoji: b['emoji']!,
+              name: b['name']!,
+              earned: earnedIds.contains(b['id']),
+            ))
+        .toList();
   }
 }
 
