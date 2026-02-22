@@ -479,6 +479,7 @@ class _ScanScreenState extends State<ScanScreen>
     required String subtitle,
     required Color color,
     VoidCallback? onConfirm,
+    Widget? trailing,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -494,14 +495,16 @@ class _ScanScreenState extends State<ScanScreen>
         subtitle: Text(subtitle,
             style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.5), fontSize: 12)),
-        trailing: onConfirm != null
+        trailing: trailing ?? (onConfirm != null
             ? IconButton(
                 icon: const Icon(Icons.check, color: AppTheme.freshGreen),
                 onPressed: onConfirm,
               )
-            : null,
+            : null),
       ),
     );
+  }
+
   // ── Manual Entry Form ────────────────────────────────────────────
 
   void _showManualEntryForm() {
@@ -536,6 +539,9 @@ class _ManualEntryBottomSheetState extends State<_ManualEntryBottomSheet> {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
       // TODO: Connect to Supabase INSERT in Phase 2 backend step
+      
+      if (!mounted) return;
+
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Added $_ingredientName to shelf!')),

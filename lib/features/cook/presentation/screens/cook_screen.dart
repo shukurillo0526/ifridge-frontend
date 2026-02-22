@@ -63,7 +63,7 @@ class _CookScreenState extends State<CookScreen>
     try {
       final client = Supabase.instance.client;
 
-      // 1. Get user's inventory ingredient IDs
+      // 1. Get user's inventory ingredient IDs for "Missing" badges
       final inventoryRows = await client
           .from('inventory_items')
           .select('ingredient_id')
@@ -73,77 +73,94 @@ class _CookScreenState extends State<CookScreen>
           .map((r) => r['ingredient_id'] as String)
           .toSet();
 
-      // 2. Get all recipes with their ingredients
+      // 2. Call the Phase 3 Discovery RPC Engine for scored recipes
+      final rpcResponse = await client.rpc('get_recommended_recipes', params: {
+        'p_user_id': _demoUserId,
+        'p_limit': 50
+      });
+
+      // 3. Fetch detailed recipe data matching those IDs
+      final recipeIds = (rpcResponse as List).map((r) => r['recipe_id'] as String).toList();
+      
       final recipeRows = await client
           .from('recipes')
           .select(
             '*, recipe_ingredients(ingredient_id, quantity, unit, is_optional, prep_note, ingredients(display_name_en))',
-          );
+          )
+          .inFilter('id', recipeIds);
 
-      // 3. Score each recipe
+      // Map details to scores
       final scored = <Map<String, dynamic>>[];
-      for (final recipe in (recipeRows as List)) {
-        final ri = (recipe['recipe_ingredients'] as List?) ?? [];
+      for (final r in rpcResponse) {
+        final recipeId = r['recipe_id'];
+        final scoreRaw = r['match_score'];
+        double score = 0.0;
+        if (scoreRaw is num) {
+          score = scoreRaw.toDouble();
+        } else if (scoreRaw is String) {
+          score = double.tryParse(scoreRaw) ?? 0.0;
+        }
+        
+        final recipeDetails = (recipeRows as List).firstWhere(
+            (row) => row['id'] == recipeId, 
+            orElse: () => null);
+            
+        if (recipeDetails == null) continue;
+
+        final ri = (recipeDetails['recipe_ingredients'] as List?) ?? [];
         final requiredIngredients = ri
-            .where((r) => r['is_optional'] != true)
+            .where((req) => req['is_optional'] != true)
             .toList();
         final totalRequired = requiredIngredients.length;
-        if (totalRequired == 0) continue;
 
         final matchedCount = requiredIngredients
-            .where((r) => ownedIds.contains(r['ingredient_id']))
+            .where((req) => ownedIds.contains(req['ingredient_id']))
             .length;
-        final matchPct = matchedCount / totalRequired;
 
         // Missing ingredient names
         final missing = requiredIngredients
-            .where((r) => !ownedIds.contains(r['ingredient_id']))
-            .map((r) {
-              final ing = r['ingredients'] as Map<String, dynamic>?;
+            .where((req) => !ownedIds.contains(req['ingredient_id']))
+            .map((req) {
+              final ing = req['ingredients'] as Map<String, dynamic>?;
               return ing?['display_name_en'] ?? 'unknown';
             })
             .toList();
 
         scored.add({
-          'id': recipe['id'],
-          'title': recipe['title'],
-          'description': recipe['description'],
-          'cuisine': recipe['cuisine'] ?? '',
-          'difficulty': recipe['difficulty'] ?? 1,
-          'prep_time_minutes': recipe['prep_time_minutes'],
-          'cook_time_minutes': recipe['cook_time_minutes'],
-          'servings': recipe['servings'],
-          'tags': (recipe['tags'] as List?)?.cast<String>() ?? [],
-          'match_pct': matchPct,
+          'id': recipeDetails['id'],
+          'title': recipeDetails['title'],
+          'description': recipeDetails['description'],
+          'cuisine': recipeDetails['cuisine'] ?? '',
+          'difficulty': recipeDetails['difficulty'] ?? 1,
+          'prep_time_minutes': recipeDetails['prep_time_minutes'],
+          'cook_time_minutes': recipeDetails['cook_time_minutes'],
+          'servings': recipeDetails['servings'],
+          'tags': (recipeDetails['tags'] as List?)?.cast<String>() ?? [],
+          'match_pct': score, // Using backend calculated score
           'matched': matchedCount,
           'total': totalRequired,
           'missing': missing,
         });
       }
 
-      // 4. Sort into tiers
-      scored.sort(
-        (a, b) =>
-            (b['match_pct'] as double).compareTo(a['match_pct'] as double),
-      );
-
+      // 4. Sort into 5 Tiers based on Backend Algorithm Score
       final Map<String, List<Map<String, dynamic>>> tiers = {
-        '1': [],
-        '2': [],
-        '3': [],
-        '4': [],
-        '5': [],
+        '1': [], // Perfect Match & High Urgency (> 0.90)
+        '2': [], // Great Match (> 0.70)
+        '3': [], // Good Match (> 0.50)
+        '4': [], // Needs Shopping (> 0.30)
+        '5': [], // Explore / Aspirational (< 0.30)
       };
 
       for (final r in scored) {
-        final pct = r['match_pct'] as double;
-        if (pct >= 1.0) {
+        final score = r['match_pct'] as double;
+        if (score >= 0.90) {
           tiers['1']!.add(r);
-        } else if (pct >= 0.8) {
+        } else if (score >= 0.70) {
           tiers['2']!.add(r);
-        } else if (pct >= 0.6) {
+        } else if (score >= 0.50) {
           tiers['3']!.add(r);
-        } else if (pct >= 0.4) {
+        } else if (score >= 0.30) {
           tiers['4']!.add(r);
         } else {
           tiers['5']!.add(r);
@@ -157,7 +174,7 @@ class _CookScreenState extends State<CookScreen>
       });
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = "Algorithm Error: ${e.toString()} \n(Ensure Supabase get_recommended_recipes RPC is deployed)";
         _loading = false;
       });
     }
