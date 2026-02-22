@@ -6,6 +6,7 @@
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:ifridge_app/core/theme/app_theme.dart';
 import 'package:ifridge_app/features/cook/presentation/screens/cooking_reward_screen.dart';
 
@@ -37,11 +38,13 @@ class _CookingRunScreenState extends State<CookingRunScreen> {
   void initState() {
     super.initState();
     _pageController = PageController();
+    WakelockPlus.enable();
   }
 
   @override
   void dispose() {
     _pageController.dispose();
+    WakelockPlus.disable();
     super.dispose();
   }
 
