@@ -205,6 +205,26 @@ class _ScanScreenState extends State<ScanScreen>
                 ),
               ),
             ),
+            
+            const SizedBox(height: 12),
+            
+            // Manual Entry Button
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: TextButton.icon(
+                onPressed: _showManualEntryForm,
+                icon: const Icon(Icons.edit_note, size: 22, color: IFridgeTheme.primary),
+                label: const Text(
+                  'Add Manually',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: IFridgeTheme.primary,
+                  ),
+                ),
+              ),
+            ),
 
             // Error message
             if (_error != null) ...[
@@ -452,6 +472,186 @@ class _ScanScreenState extends State<ScanScreen>
                 onPressed: onConfirm,
               )
             : null,
+      ),
+    );
+  // ── Manual Entry Form ────────────────────────────────────────────
+
+  void _showManualEntryForm() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const _ManualEntryBottomSheet(),
+    );
+  }
+}
+
+class _ManualEntryBottomSheet extends StatefulWidget {
+  const _ManualEntryBottomSheet();
+
+  @override
+  State<_ManualEntryBottomSheet> createState() => _ManualEntryBottomSheetState();
+}
+
+class _ManualEntryBottomSheetState extends State<_ManualEntryBottomSheet> {
+  final _formKey = GlobalKey<FormState>();
+  String? _selectedIngredientId;
+  String _ingredientName = '';
+  double _quantity = 1.0;
+  String _unit = 'pcs';
+  DateTime _expiryDate = DateTime.now().add(const Duration(days: 7));
+  
+  // Future: Autocomplete from master_ingredients table
+  final List<String> _units = ['pcs', 'g', 'kg', 'ml', 'L', 'pack', 'bunch'];
+
+  Future<void> _submit() async {
+    if (_formKey.currentState!.validate()) {
+      _formKey.currentState!.save();
+      // TODO: Connect to Supabase INSERT in Phase 2 backend step
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Added $_ingredientName to shelf!')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Handle keyboard pushing up the sheet
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 24,
+        bottom: bottomInset > 0 ? bottomInset + 24 : 48,
+      ),
+      decoration: BoxDecoration(
+        color: IFridgeTheme.bgElevated,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Handle bar
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 24),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            
+            const Text(
+              'Add Ingredient',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Autocomplete Field (Mocked for now)
+            TextFormField(
+              decoration: InputDecoration(
+                labelText: 'Ingredient Name',
+                hintText: 'e.g. Milk, Apples, Chicken',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                prefixIcon: const Icon(Icons.search),
+              ),
+              validator: (v) => v!.isEmpty ? 'Required' : null,
+              onSaved: (v) => _ingredientName = v!,
+            ),
+            const SizedBox(height: 16),
+
+            // Quantity & Unit Row
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    initialValue: '1',
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: 'Qty',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onSaved: (v) => _quantity = double.tryParse(v!) ?? 1.0,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  flex: 3,
+                  child: DropdownButtonFormField<String>(
+                    value: _unit,
+                    decoration: InputDecoration(
+                      labelText: 'Unit',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    items: _units.map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
+                    onChanged: (v) => setState(() => _unit = v!),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Expiry Date Picker (Mocked Action)
+            InkWell(
+              onTap: () async {
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: _expiryDate,
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime.now().add(const Duration(days: 730)),
+                );
+                if (date != null) setState(() => _expiryDate = date);
+              },
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  labelText: 'Estimated Expiry',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: const Icon(Icons.calendar_today),
+                ),
+                child: Text(
+                  '${_expiryDate.month}/${_expiryDate.day}/${_expiryDate.year}',
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ),
+            ),
+            const SizedBox(height: 32),
+
+            // Submit
+            FilledButton(
+              onPressed: _submit,
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                backgroundColor: IFridgeTheme.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              child: const Text('Add to Shelf', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
       ),
     );
   }
