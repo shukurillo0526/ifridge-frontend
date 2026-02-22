@@ -1,10 +1,10 @@
 // I-Fridge — Active Cooking Screen
 // ==================================
-// Distraction-free, step-by-step cooking interface.
-// Parses robot_action JSON to display simulated backend actions.
-// Allows sweeping through steps and completing the recipe.
+// Distraction-free, step-by-step cooking tutorial.
+// Features: contextual icons, interactive countdown timers,
+// attention flags, wakelock, and swipeable step cards.
 
-import 'dart:convert';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:ifridge_app/core/theme/app_theme.dart';
@@ -164,7 +164,7 @@ class _CookingRunScreenState extends State<CookingRunScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Back Button (hidden on first step)
+                  // Back Button
                   _currentIndex > 0
                       ? TextButton.icon(
                           onPressed: _prevStep,
@@ -237,81 +237,103 @@ class _CookingRunScreenState extends State<CookingRunScreen> {
   }
 }
 
-// ── Step Detail Card ────────────────────────────────────────────────
+// ── Step Detail Card (Human-First Tutorial) ─────────────────────────
 
-class _CookingStepCard extends StatelessWidget {
+class _CookingStepCard extends StatefulWidget {
   final Map<String, dynamic> step;
 
   const _CookingStepCard({required this.step});
 
   @override
+  State<_CookingStepCard> createState() => _CookingStepCardState();
+}
+
+class _CookingStepCardState extends State<_CookingStepCard> {
+  int? _timerSeconds;
+  bool _timerRunning = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final est = widget.step['estimated_seconds'];
+    if (est != null && est is int && est > 0) {
+      _timerSeconds = est;
+    }
+  }
+
+  void _startTimer() {
+    if (_timerSeconds == null || _timerSeconds! <= 0 || _timerRunning) return;
+    setState(() => _timerRunning = true);
+    _tick();
+  }
+
+  void _tick() {
+    Future.delayed(const Duration(seconds: 1), () {
+      if (!mounted || !_timerRunning) return;
+      setState(() {
+        _timerSeconds = (_timerSeconds ?? 1) - 1;
+        if (_timerSeconds! <= 0) {
+          _timerRunning = false;
+        } else {
+          _tick();
+        }
+      });
+    });
+  }
+
+  String _formatTime(int seconds) {
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    if (m > 0) return '${m}m ${s.toString().padLeft(2, '0')}s';
+    return '${s}s';
+  }
+
+  // Choose an icon based on common cooking keywords
+  IconData _pickIcon(String text) {
+    final lower = text.toLowerCase();
+    if (lower.contains('heat') || lower.contains('boil') || lower.contains('simmer')) {
+      return Icons.local_fire_department;
+    }
+    if (lower.contains('cut') || lower.contains('chop') || lower.contains('dice') || lower.contains('slice')) {
+      return Icons.content_cut;
+    }
+    if (lower.contains('mix') || lower.contains('stir') || lower.contains('whisk')) {
+      return Icons.blender;
+    }
+    if (lower.contains('bake') || lower.contains('oven')) {
+      return Icons.microwave;
+    }
+    if (lower.contains('fry') || lower.contains('saute') || lower.contains('pan')) {
+      return Icons.lunch_dining;
+    }
+    if (lower.contains('serve') || lower.contains('plate') || lower.contains('garnish')) {
+      return Icons.room_service;
+    }
+    if (lower.contains('wash') || lower.contains('rinse') || lower.contains('clean')) {
+      return Icons.water_drop;
+    }
+    if (lower.contains('season') || lower.contains('salt') || lower.contains('pepper')) {
+      return Icons.spa;
+    }
+    if (lower.contains('cool') || lower.contains('chill') || lower.contains('refrigerat')) {
+      return Icons.ac_unit;
+    }
+    return Icons.restaurant;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final humanText = step['human_text'] ?? '';
-    final estimatedSeconds = step['estimated_seconds'];
-    final requiresAttention = step['requires_attention'] == true;
-
-    // Parse Robot Action JSON
-    Map<String, dynamic> robotAction = {};
-    if (step['robot_action'] != null) {
-      if (step['robot_action'] is String) {
-        try {
-          robotAction = jsonDecode(step['robot_action']);
-        } catch (_) {}
-      } else if (step['robot_action'] is Map) {
-        robotAction = step['robot_action'] as Map<String, dynamic>;
-      }
-    }
-
-    final actionType = robotAction['action'] ?? 'UNKNOWN';
-    final target = robotAction['target'] ?? 'item';
-    final params = (robotAction['params'] as Map?) ?? {};
-
-    // Robot Summary
-    String robotSummary = 'Waiting for instruction';
-    IconData robotIcon = Icons.memory;
-
-    switch (actionType) {
-      case 'CUT':
-        robotSummary =
-            'Preparing to cut $target (${params['style'] ?? 'default style'})';
-        robotIcon = Icons.fastfood;
-        break;
-      case 'HEAT':
-        robotSummary = 'Heating $target to ${params['temp_c']}°C...';
-        robotIcon = Icons.local_fire_department;
-        break;
-      case 'FRY':
-      case 'SAUTE':
-      case 'SCRAMBLE':
-      case 'SIMMER':
-      case 'BOIL':
-        robotSummary =
-            'Cooking $target for ${params['duration_s'] ?? estimatedSeconds}s';
-        robotIcon = Icons.lunch_dining;
-        break;
-      case 'MIX':
-        robotSummary = 'Mixing $target automatically...';
-        robotIcon = Icons.blender;
-        break;
-      case 'BAKE':
-        robotSummary = 'Baking $target at ${params['temp_c']}°C...';
-        robotIcon = Icons.microwave;
-        break;
-      case 'PLATE':
-      case 'SEASON_PLATE':
-        robotSummary = 'Ready for plating $target';
-        robotIcon = Icons.room_service;
-        break;
-      default:
-        robotSummary = 'Executing $actionType on $target';
-    }
+    final humanText = widget.step['human_text'] ?? '';
+    final estimatedSeconds = widget.step['estimated_seconds'];
+    final requiresAttention = widget.step['requires_attention'] == true;
+    final icon = _pickIcon(humanText);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 32, 24, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Graphic / Illustration Placeholder
+          // Cooking Illustration Area
           Expanded(
             flex: 2,
             child: Container(
@@ -321,114 +343,98 @@ class _CookingStepCard extends StatelessWidget {
                 border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
               ),
               child: Center(
-                child: Icon(
-                  requiresAttention ? Icons.front_hand : Icons.smart_toy,
-                  size: 80,
-                  color:
-                      (requiresAttention ? Colors.orange : IFridgeTheme.primary)
-                          .withValues(alpha: 0.2),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      icon,
+                      size: 72,
+                      color: (requiresAttention ? Colors.orange : IFridgeTheme.primary)
+                          .withValues(alpha: 0.3),
+                    ),
+                    if (requiresAttention) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text(
+                          '👀 Needs Your Attention',
+                          style: TextStyle(
+                            color: Colors.orange,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
 
-          // Core Instruction (Human)
+          // Core Instruction — Big, bold, readable
           Text(
             humanText,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 24,
+              fontSize: 22,
               fontWeight: FontWeight.w700,
-              height: 1.4,
+              height: 1.5,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
 
-          // Time Estimate
-          if (estimatedSeconds != null)
-            Row(
-              children: [
-                Icon(
-                  Icons.timer_outlined,
-                  size: 20,
-                  color: Colors.white.withValues(alpha: 0.5),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  estimatedSeconds < 60
-                      ? '${estimatedSeconds} seconds'
-                      : '${estimatedSeconds ~/ 60}m ${estimatedSeconds % 60}s',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.7),
-                    fontSize: 16,
+          // Interactive Timer Button
+          if (estimatedSeconds != null && estimatedSeconds is int && estimatedSeconds > 0)
+            GestureDetector(
+              onTap: _startTimer,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                decoration: BoxDecoration(
+                  color: _timerRunning
+                      ? IFridgeTheme.primary.withValues(alpha: 0.15)
+                      : Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _timerRunning
+                        ? IFridgeTheme.primary.withValues(alpha: 0.4)
+                        : Colors.white.withValues(alpha: 0.1),
                   ),
                 ),
-              ],
-            ),
-
-          const SizedBox(height: 32),
-
-          // Robot Simulated Action Decode
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: requiresAttention
-                    ? Colors.orange.withValues(alpha: 0.15)
-                    : IFridgeTheme.primary.withValues(alpha: 0.15),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      requiresAttention ? Icons.person : Icons.smart_toy,
-                      size: 14,
-                      color: requiresAttention
-                          ? Colors.orange
-                          : IFridgeTheme.primary,
+                      _timerRunning ? Icons.timer : Icons.play_circle_fill,
+                      color: _timerRunning ? IFridgeTheme.primary : Colors.white70,
+                      size: 24,
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 12),
                     Text(
-                      requiresAttention
-                          ? 'MANUAL ACTION REQUIRED'
-                          : 'AUTOMATED ROBOT ACTION',
+                      _timerRunning
+                          ? _formatTime(_timerSeconds ?? 0)
+                          : 'Start Timer • ${_formatTime(estimatedSeconds)}',
                       style: TextStyle(
-                        color: requiresAttention
-                            ? Colors.orange
-                            : IFridgeTheme.primary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.5,
+                        color: _timerRunning ? IFridgeTheme.primary : Colors.white70,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
+                    if (_timerSeconds == 0) ...[
+                      const SizedBox(width: 12),
+                      const Icon(Icons.check_circle, color: IFridgeTheme.freshGreen, size: 22),
+                    ],
                   ],
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(robotIcon, size: 18, color: Colors.white54),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        robotSummary,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 13,
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
-          ),
 
           const Spacer(),
         ],

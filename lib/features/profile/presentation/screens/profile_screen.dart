@@ -329,38 +329,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                 const SizedBox(height: 12),
 
-                // Settings
-                _SectionCard(
-                  title: 'Settings',
-                  child: Column(
-                    children: [
-                      _SettingsTile(
-                        icon: Icons.notifications_outlined,
-                        label: 'Notifications',
-                        trailing: Switch(
-                          value: true,
-                          onChanged: (_) {},
-                          activeColor: AppTheme.accent,
-                        ),
-                      ),
-                      _SettingsTile(
-                        icon: Icons.palette_outlined,
-                        label: 'Theme',
-                        trailing: Text('Dark',
-                            style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.5))),
-                      ),
-                      _SettingsTile(
-                        icon: Icons.info_outline,
-                        label: 'About I-Fridge',
-                        trailing: Icon(Icons.chevron_right,
-                            color: Colors.white.withValues(alpha: 0.3)),
-                      ),
-                    ],
-                  ),
-                ),
 
-                const SizedBox(height: 32),
               ]),
             ),
           ),
@@ -518,36 +487,6 @@ class _BadgeTile extends StatelessWidget {
   }
 }
 
-// ── Settings Tile ────────────────────────────────────────────────
-
-class _SettingsTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Widget trailing;
-
-  const _SettingsTile(
-      {required this.icon, required this.label, required this.trailing});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.white54, size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-            ),
-          ),
-          trailing,
-        ],
-      ),
-    );
-  }
-}
 
 // ── Flavor Radar Chart Painter ───────────────────────────────────
 

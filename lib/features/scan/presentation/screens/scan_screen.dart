@@ -8,6 +8,7 @@ import 'dart:typed_data';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ifridge_app/core/services/api_service.dart';
 import 'package:ifridge_app/core/theme/app_theme.dart';
 import 'package:ifridge_app/features/scan/presentation/screens/audit_screen.dart';
@@ -544,20 +545,75 @@ class _ManualEntryBottomSheetState extends State<_ManualEntryBottomSheet> {
   String _unit = 'pcs';
   DateTime _expiryDate = DateTime.now().add(const Duration(days: 7));
   
-  // Future: Autocomplete from master_ingredients table
-  final List<String> _units = ['pcs', 'g', 'kg', 'ml', 'L', 'pack', 'bunch'];
+  // Category to bind the state of the dropdown
+  String _category = 'Produce';
+  
+  // Advanced Metric Types
+  final List<String> _units = [
+    // Count
+    'pcs', 'pack', 'bunch',
+    // Mass
+    'g', 'kg', 'oz', 'lb',
+    // Volume
+    'ml', 'L', 'cup', 'tbsp', 'tsp'
+  ];
 
   Future<void> _submit() async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
-      // TODO: Connect to Supabase INSERT in Phase 2 backend step
-      
-      if (!mounted) return;
 
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Added $_ingredientName to shelf!')),
-      );
+      // Insert into Supabase inventory_items
+      try {
+        final client = Supabase.instance.client;
+        final user = client.auth.currentUser;
+        final userId = user?.id ?? '00000000-0000-4000-8000-000000000001';
+
+        // 1. Upsert into ingredients table (find or create)
+        final existingIngredient = await client
+            .from('ingredients')
+            .select('id')
+            .ilike('name', _ingredientName)
+            .maybeSingle();
+
+        String ingredientId;
+        if (existingIngredient != null) {
+          ingredientId = existingIngredient['id'];
+        } else {
+          final inserted = await client.from('ingredients').insert({
+            'name': _ingredientName,
+            'category': _category,
+            'default_unit': _unit,
+          }).select('id').single();
+          ingredientId = inserted['id'];
+        }
+
+        // 2. Insert into inventory_items
+        await client.from('inventory_items').insert({
+          'user_id': userId,
+          'ingredient_id': ingredientId,
+          'quantity': _quantity,
+          'unit': _unit,
+          'location': 'Fridge',
+          'expiry_date': _expiryDate.toIso8601String(),
+        });
+
+        if (!mounted) return;
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Added $_ingredientName to shelf!'),
+            backgroundColor: IFridgeTheme.freshGreen,
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     }
   }
 
@@ -611,7 +667,7 @@ class _ManualEntryBottomSheetState extends State<_ManualEntryBottomSheet> {
             TextFormField(
               decoration: InputDecoration(
                 labelText: 'Ingredient Name',
-                hintText: 'e.g. Milk, Apples, Chicken',
+                hintText: 'e.g. Apples, Bread, Milk',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -619,6 +675,27 @@ class _ManualEntryBottomSheetState extends State<_ManualEntryBottomSheet> {
               ),
               validator: (v) => v!.isEmpty ? 'Required' : null,
               onSaved: (v) => _ingredientName = v!,
+            ),
+            const SizedBox(height: 16),
+
+            // Category Dropdown
+            DropdownButtonFormField<String>(
+              value: _category,
+              decoration: InputDecoration(
+                labelText: 'Category',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                prefixIcon: const Icon(Icons.category),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'Produce', child: Text('Produce')),
+                DropdownMenuItem(value: 'Meat', child: Text('Meat')),
+                DropdownMenuItem(value: 'Dairy', child: Text('Dairy')),
+                DropdownMenuItem(value: 'Pantry', child: Text('Pantry')),
+                DropdownMenuItem(value: 'Bakery', child: Text('Bakery')),
+              ],
+              onChanged: (v) => setState(() => _category = v!),
             ),
             const SizedBox(height: 16),
 
@@ -645,7 +722,7 @@ class _ManualEntryBottomSheetState extends State<_ManualEntryBottomSheet> {
                   child: DropdownButtonFormField<String>(
                     value: _unit,
                     decoration: InputDecoration(
-                      labelText: 'Unit',
+                      labelText: 'Metric Type',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),

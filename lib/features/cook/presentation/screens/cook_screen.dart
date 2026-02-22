@@ -32,11 +32,11 @@ class _CookScreenState extends State<CookScreen>
   Set<String> _ownedIngredientIds = {};
 
   static const _tierMeta = [
-    (label: 'Perfect', icon: Icons.star, key: '1'),
-    (label: 'Discover', icon: Icons.explore, key: '2'),
-    (label: 'Almost', icon: Icons.shopping_cart, key: '3'),
-    (label: 'Try', icon: Icons.lightbulb, key: '4'),
-    (label: 'Global', icon: Icons.language, key: '5'),
+    (label: 'Perfect', icon: Icons.verified, key: '1'),
+    (label: 'For You', icon: Icons.auto_awesome, key: '2'),
+    (label: 'Use It Up', icon: Icons.timer, key: '3'),
+    (label: 'Almost', icon: Icons.shopping_cart_outlined, key: '4'),
+    (label: 'Explore', icon: Icons.explore, key: '5'),
   ];
 
   @override
@@ -337,15 +337,30 @@ class _RecipeCard extends StatelessWidget {
   Color get _tierColor {
     switch (tierKey) {
       case '1':
-        return IFridgeTheme.tier1; // green — perfect
+        return IFridgeTheme.tier1;
       case '2':
-        return IFridgeTheme.tier2; // blue — discover
+        return IFridgeTheme.tier2;
       case '3':
-        return IFridgeTheme.tier3; // amber — almost
+        return IFridgeTheme.tier3;
       case '4':
-        return IFridgeTheme.tier4; // purple — try
+        return IFridgeTheme.tier4;
       default:
-        return IFridgeTheme.tier5; // grey — global
+        return IFridgeTheme.tier5;
+    }
+  }
+
+  String get _tierBadge {
+    switch (tierKey) {
+      case '1':
+        return '✅ Everything you need!';
+      case '2':
+        return '🔥 Recommended for you';
+      case '3':
+        return '⏰ Use expiring items';
+      case '4':
+        return '🛒 Just a few items away';
+      default:
+        return '🌍 Discover something new';
     }
   }
 
@@ -437,6 +452,17 @@ class _RecipeCard extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+
+              // Recommendation Reason Badge
+              const SizedBox(height: 6),
+              Text(
+                _tierBadge,
+                style: TextStyle(
+                  color: _tierColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
 
               if (description.isNotEmpty) ...[
