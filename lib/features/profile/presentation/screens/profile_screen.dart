@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ifridge_app/core/theme/app_theme.dart';
+import 'package:ifridge_app/core/widgets/shimmer_loading.dart';
 import 'package:ifridge_app/features/gamification/domain/badges.dart' show levelFromXp;
 
 const _demoUserId = '00000000-0000-4000-8000-000000000001';
@@ -111,16 +112,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_loading) {
       return Scaffold(
         backgroundColor: AppTheme.background,
-        body: const Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(color: AppTheme.accent),
-              SizedBox(height: 16),
-              Text('Loading profile...', style: TextStyle(color: Colors.white70)),
-            ],
-          ),
-        ),
+        body: const ProfileSkeleton(),
       );
     }
 
@@ -189,7 +181,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: LinearGradient(
-                            colors: [AppTheme.accent, AppTheme.tierGold],
+                            colors: [IFridgeTheme.primary, IFridgeTheme.secondary],
                           ),
                           boxShadow: [
                             BoxShadow(
@@ -249,7 +241,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           Text(
                             'Level $_level',
                             style: const TextStyle(
-                              color: AppTheme.tierGold,
+                              color: IFridgeTheme.primary,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -263,13 +255,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ],
                       ),
                       const SizedBox(height: 10),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: LinearProgressIndicator(
-                          value: progress.clamp(0.0, 1.0),
-                          minHeight: 10,
-                          backgroundColor: Colors.white.withValues(alpha: 0.08),
-                          valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.accent),
+                      TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0, end: progress.clamp(0.0, 1.0)),
+                        duration: const Duration(milliseconds: 800),
+                        curve: Curves.easeOutCubic,
+                        builder: (_, value, __) => ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: LinearProgressIndicator(
+                            value: value,
+                            minHeight: 10,
+                            backgroundColor: Colors.white.withValues(alpha: 0.08),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Color.lerp(IFridgeTheme.primary, IFridgeTheme.secondary, value) ?? IFridgeTheme.primary,
+                            ),
+                          ),
                         ),
                       ),
                     ],

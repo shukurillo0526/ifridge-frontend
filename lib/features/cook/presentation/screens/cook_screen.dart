@@ -7,6 +7,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ifridge_app/core/theme/app_theme.dart';
+import 'package:ifridge_app/core/widgets/shimmer_loading.dart';
+import 'package:ifridge_app/core/widgets/slide_in_item.dart';
 
 const _demoUserId = '00000000-0000-4000-8000-000000000001';
 
@@ -184,16 +186,7 @@ class _CookScreenState extends State<CookScreen>
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(color: AppTheme.accent),
-            SizedBox(height: 16),
-            Text('Finding recipes...', style: TextStyle(color: Colors.white70)),
-          ],
-        ),
-      );
+      return const RecipeListSkeleton();
     }
 
     if (_error != null) {
@@ -265,8 +258,10 @@ class _CookScreenState extends State<CookScreen>
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: recipes.length,
-        itemBuilder: (context, index) =>
-            _RecipeCard(recipe: recipes[index], tierKey: tierKey),
+        itemBuilder: (context, index) => SlideInItem(
+          delay: index * 80,
+          child: _RecipeCard(recipe: recipes[index], tierKey: tierKey),
+        ),
       ),
     );
   }
@@ -283,15 +278,15 @@ class _RecipeCard extends StatelessWidget {
   Color get _tierColor {
     switch (tierKey) {
       case '1':
-        return AppTheme.tierGold;
+        return IFridgeTheme.tier1; // green — perfect
       case '2':
-        return AppTheme.tierSilver;
+        return IFridgeTheme.tier2; // blue — discover
       case '3':
-        return AppTheme.tierBronze;
+        return IFridgeTheme.tier3; // amber — almost
       case '4':
-        return const Color(0xFF6C757D);
+        return IFridgeTheme.tier4; // purple — try
       default:
-        return AppTheme.accent;
+        return IFridgeTheme.tier5; // grey — global
     }
   }
 

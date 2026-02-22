@@ -6,6 +6,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ifridge_app/core/theme/app_theme.dart';
+import 'package:ifridge_app/core/widgets/shimmer_loading.dart';
+import 'package:ifridge_app/core/widgets/slide_in_item.dart';
 import 'package:ifridge_app/features/shelf/domain/inventory_item.dart';
 import 'package:ifridge_app/features/shelf/presentation/widgets/inventory_item_card.dart';
 
@@ -130,17 +132,7 @@ class _LivingShelfScreenState extends State<LivingShelfScreen>
         ),
       ),
       body: _loading
-          ? const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(color: AppTheme.accent),
-                  SizedBox(height: 16),
-                  Text('Loading inventory...',
-                      style: TextStyle(color: Colors.white70)),
-                ],
-              ),
-            )
+          ? const ShelfSkeleton()
           : _error != null
               ? _buildErrorState()
               : TabBarView(
@@ -328,8 +320,10 @@ class _LivingShelfScreenState extends State<LivingShelfScreen>
                 childAspectRatio: 0.72,
               ),
               delegate: SliverChildBuilderDelegate(
-                (context, index) =>
-                    InventoryItemCard(item: items[index]),
+                (context, index) => SlideInItem(
+                  delay: index * 60,
+                  child: InventoryItemCard(item: items[index]),
+                ),
                 childCount: items.length,
               ),
             ),
