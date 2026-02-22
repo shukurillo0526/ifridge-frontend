@@ -44,6 +44,28 @@ class ApiService {
 
   // ── Vision ───────────────────────────────────────────────────────
 
+  /// Send a grocery receipt image for OCR and AI analysis.
+  /// Returns a structured JSON list of detected ingredients and expirations.
+  Future<Map<String, dynamic>> parseReceipt({
+    required Uint8List imageBytes,
+    String filename = 'receipt.jpg',
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/api/v1/receipt/scan');
+
+    final request = http.MultipartRequest('POST', uri)
+      ..headers.addAll({'Accept': 'application/json'}) // No auth header needed for this MVP endpoint yet
+      ..files.add(http.MultipartFile.fromBytes(
+        'file',
+        imageBytes,
+        filename: filename,
+        contentType: MediaType('image', 'jpeg'),
+      ));
+
+    final streamedResponse = await _client.send(request);
+    final response = await http.Response.fromStream(streamedResponse);
+    return _handleResponse(response);
+  }
+
   /// Send a food image for AI recognition.
   /// Returns categorized predictions (auto_added, confirm, correct).
   Future<Map<String, dynamic>> recognizeImage({

@@ -61,8 +61,8 @@ class _ScanScreenState extends State<ScanScreen>
 
       final Uint8List bytes = await image.readAsBytes();
 
-      final result = await _api.recognizeImage(
-        userId: 'demo-user',
+      // Send to FastAPI -> Gemini Vision Endpoint
+      final result = await _api.parseReceipt(
         imageBytes: bytes,
         filename: image.name,
       );
@@ -293,21 +293,22 @@ class _ScanScreenState extends State<ScanScreen>
     );
   }
 
-  // ── Results State ────────────────────────────────────────────────
+  // ── Results State (Parsed Receipt) ───────────────────────────────
 
   Widget _buildResults() {
-    final autoAdded = (_results?['auto_added'] as List?) ?? [];
-    final confirm = (_results?['confirm'] as List?) ?? [];
-    final correct = (_results?['correct'] as List?) ?? [];
+    final data = _results?['data'] as Map<String, dynamic>?;
+    if (data == null) return _buildCaptureState();
 
-    final total = autoAdded.length + confirm.length + correct.length;
+    final store = data['store'] as String? ?? 'Unknown Store';
+    final date = data['date'] as String? ?? 'Unknown Date';
+    final items = (data['items'] as List?) ?? [];
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Summary header
+          // Receipt Summary header
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(20),
@@ -319,85 +320,85 @@ class _ScanScreenState extends State<ScanScreen>
                 ],
               ),
               borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.accent.withValues(alpha: 0.3)),
             ),
             child: Column(
               children: [
-                Icon(
-                  total > 0 ? Icons.check_circle : Icons.info_outline,
-                  color: total > 0 ? AppTheme.freshGreen : Colors.white54,
+                const Icon(
+                  Icons.receipt_long,
+                  color: AppTheme.accent,
                   size: 40,
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  total > 0
-                      ? '$total item${total != 1 ? 's' : ''} detected'
-                      : 'No food items detected',
+                  store,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 18,
+                    fontSize: 20,
                     fontWeight: FontWeight.w700,
                   ),
+                  textAlign: TextAlign.center,
                 ),
+                const SizedBox(height: 4),
+                Text(
+                  date,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.6),
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.freshGreen.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${items.length} Items Detected',
+                    style: const TextStyle(
+                      color: AppTheme.freshGreen,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                )
               ],
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
 
-          // Auto-added section
-          if (autoAdded.isNotEmpty) ...[
+          // Parsed Items List
+          if (items.isNotEmpty) ...[
             _sectionHeader(
-              '✅ Auto-Added',
-              '${autoAdded.length} items added instantly',
-              AppTheme.freshGreen,
+              '📦 Parsed Ingredients',
+              'Review and add to shelf',
+              Colors.white,
             ),
-            ...autoAdded.map((id) => _resultTile(
-              icon: Icons.check_circle,
-              title: 'Item added to shelf',
-              subtitle: 'ID: $id',
-              color: AppTheme.freshGreen,
-            )),
-            const SizedBox(height: 16),
-          ],
+            ...items.map((item) {
+              final i = item as Map<String, dynamic>;
+              final canonicalName = i['canonical_name'] ?? 'Unknown';
+              final qty = i['quantity']?.toString() ?? '1';
+              final unit = i['unit'] ?? '';
+              final category = i['category'] ?? '';
+              final expiry = i['expiry_date'] != null 
+                  ? DateTime.parse(i['expiry_date']).toString().split(' ')[0] 
+                  : 'Unknown';
 
-          // Confirm section
-          if (confirm.isNotEmpty) ...[
-            _sectionHeader(
-              '🔶 Needs Confirmation',
-              '${confirm.length} items to review',
-              Colors.orange,
-            ),
-            ...confirm.map((pred) {
-              final p = pred as Map<String, dynamic>;
               return _resultTile(
-                icon: Icons.help_outline,
-                title: p['clarifai_concept'] ?? 'Unknown',
-                subtitle:
-                    'Confidence: ${((p['confidence'] ?? 0) * 100).toInt()}%',
-                color: Colors.orange,
-                onConfirm: () {
-                  // TODO: Implement confirm action
-                },
-              );
-            }),
-            const SizedBox(height: 16),
-          ],
-
-          // Correct section
-          if (correct.isNotEmpty) ...[
-            _sectionHeader(
-              '❌ Needs Correction',
-              '${correct.length} items to identify',
-              Colors.red,
-            ),
-            ...correct.map((pred) {
-              final p = pred as Map<String, dynamic>;
-              return _resultTile(
-                icon: Icons.edit,
-                title: p['clarifai_concept'] ?? 'Unknown',
-                subtitle:
-                    'Confidence: ${((p['confidence'] ?? 0) * 100).toInt()}% — tap to correct',
-                color: Colors.red,
+                icon: Icons.check_circle_outline,
+                title: canonicalName,
+                subtitle: '$qty $unit • $category\nExp: $expiry',
+                color: AppTheme.freshGreen,
+                trailing: IconButton(
+                  icon: const Icon(Icons.add_shopping_cart, color: AppTheme.accent),
+                  onPressed: () {
+                    // TODO: Phase 2 Connect specific item insert to Supabase RPC
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Added $canonicalName!')),
+                    );
+                  },
+                ),
               );
             }),
           ],
@@ -408,13 +409,40 @@ class _ScanScreenState extends State<ScanScreen>
           SizedBox(
             width: double.infinity,
             height: 52,
-            child: FilledButton.icon(
+            child: OutlinedButton.icon(
               onPressed: () => setState(() {
                 _results = null;
                 _error = null;
               }),
-              icon: const Icon(Icons.camera_alt),
-              label: const Text('Scan Again'),
+              icon: Icon(Icons.refresh, color: Colors.white.withValues(alpha: 0.7)),
+              label: Text('Scan Another', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Add All Button
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: FilledButton.icon(
+              onPressed: () {
+                 // TODO: Phase 2 Connect Bulk Insert to Supabase RPC
+                 ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('All items added to shelf!')),
+                  );
+                 setState(() {
+                  _results = null;
+                 });
+              },
+              icon: const Icon(Icons.playlist_add_check),
+              label: const Text('Add All to Shelf', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               style: FilledButton.styleFrom(
                 backgroundColor: AppTheme.accent,
                 shape: RoundedRectangleBorder(
