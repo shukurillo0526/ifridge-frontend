@@ -153,54 +153,32 @@ class _CookScreenState extends State<CookScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
-      body: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxScrolled) => [
-          SliverAppBar(
-            pinned: true,
-            floating: false,
-            expandedHeight: 180,
-            backgroundColor: AppTheme.surface,
-            flexibleSpace: FlexibleSpaceBar(
-              titlePadding: const EdgeInsets.only(left: 16, bottom: 56),
-              title: const Text(
-                'What to Cook?',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
-              ),
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppTheme.accent.withValues(alpha: 0.3),
-                      AppTheme.background,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.refresh),
-                onPressed: _fetchRecipes,
-                tooltip: 'Refresh',
-              ),
-            ],
-            bottom: TabBar(
-              controller: _tabController,
-              isScrollable: true,
-              indicatorColor: AppTheme.accent,
-              labelColor: AppTheme.accent,
-              unselectedLabelColor: Colors.white54,
-              tabAlignment: TabAlignment.start,
-              tabs: _tierMeta
-                  .map((t) => Tab(icon: Icon(t.icon, size: 18), text: t.label))
-                  .toList(),
-            ),
+      appBar: AppBar(
+        title: const Text(
+          'What to Cook?',
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
+        ),
+        backgroundColor: AppTheme.surface,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _fetchRecipes,
+            tooltip: 'Refresh',
           ),
         ],
-        body: _buildBody(),
+        bottom: TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          indicatorColor: AppTheme.accent,
+          labelColor: AppTheme.accent,
+          unselectedLabelColor: Colors.white54,
+          tabAlignment: TabAlignment.start,
+          tabs: _tierMeta
+              .map((t) => Tab(icon: Icon(t.icon, size: 18), text: t.label))
+              .toList(),
+        ),
       ),
+      body: _buildBody(),
     );
   }
 
