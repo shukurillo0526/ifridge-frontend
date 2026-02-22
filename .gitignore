@@ -1,0 +1,31 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+*.iml
+.metadata
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+*.env.local
+
+# Test output
+coverage/
+analyze_output.txt
+build_output.txt
+
+# Generated
+*.g.dart
+*.freezed.dart
